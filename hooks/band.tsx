@@ -17,7 +17,9 @@ function clip(text: string, width: number): string {
   return result
 }
 
-export function composeBand(
+export type BandProgress = { air: string; ground: string; done: number; total: number; name: string }
+
+export function layoutBand(
   width: number,
   usage: UsageState,
   now: number,
@@ -25,8 +27,8 @@ export function composeBand(
   ctxWarn = 70,
   warningVisible = true,
   display?: DisplayState,
-  progress?: { air: string; ground: string; done: number; total: number; name: string },
-): [string, string] {
+  progress?: BandProgress,
+) {
   let showName = true
   let quotaCells = 10
   let contextCells = 5
@@ -41,12 +43,13 @@ export function composeBand(
     const ctx = usage.context === undefined ? '   —' : Math.round(usage.context) >= ctxWarn
       ? `${warningVisible ? '⚠️' : '  '} ${100 - Math.round(usage.context)}% left`
       : `${Math.round(usage.context)}%`.padStart(4)
-    const count = !progress ? ''
-      : progress.total === 0 ? `${progress.ground}  `
-      : `${progress.ground}  ${progress.done}/${progress.total}${showName && progress.name ? ' ' + progress.name : ''} · `
-    const left = `  ${count}ctx ${showBar ? brailleBar(display?.context ?? usage.context ?? 0, contextCells) + ' ' : ''}${ctx}`
+    const counter = !progress ? ''
+      : progress.total === 0 ? '  '
+      : `  ${progress.done}/${progress.total}${showName && progress.name ? ' ' + progress.name : ''} · `
+    const ctxBar = showBar ? brailleBar(display?.context ?? usage.context ?? 0, contextCells) : ''
+    const left = `  ${progress?.ground ?? ''}${counter}ctx ${ctxBar ? ctxBar + ' ' : ''}${ctx}`
     const trimReset = (text: string) => showReset ? text : text.slice(0, -9)
-    return { top: trimReset(row(five)), bottom: trimReset(row(seven)), left }
+    return { top: trimReset(row(five)), bottom: trimReset(row(seven)), left, five, seven, amountWidth, counter, ctxBar, ctx }
   }
 
   let parts = make()
@@ -56,6 +59,20 @@ export function composeBand(
   if (!fits()) { showReset = false; parts = make() }
   if (!fits()) { showBar = false; parts = make() }
 
+  return { parts, showReset, showBar, narrowBars: quotaCells < 10, air: progress?.air ?? '', ground: progress?.ground ?? '' }
+}
+
+export function composeBand(
+  width: number,
+  usage: UsageState,
+  now: number,
+  warn = 80,
+  ctxWarn = 70,
+  warningVisible = true,
+  display?: DisplayState,
+  progress?: BandProgress,
+): [string, string] {
+  const { parts } = layoutBand(width, usage, now, warn, ctxWarn, warningVisible, display, progress)
   const air = progress?.air ? `  ${progress.air}` : ''
   const topPad = Math.max(0, width - cellWidth(air) - cellWidth(parts.top))
   const bottomPad = Math.max(5, width - cellWidth(parts.left) - cellWidth(parts.bottom))

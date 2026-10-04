@@ -1,12 +1,14 @@
 import type { CoreEngineInterface, Register, SessionUsage } from 'claude-code'
-import { composeBand } from './band'
+import { composeBand, layoutBand } from './band'
 import type { UsageState, DisplayState } from '../types'
 import { crossingAlerts } from './usage/alerts'
 import { formatReset, levelColor } from './usage/format'
 import { nextBarPercent, warningVisible } from './usage/animate'
 import { parseChecklist, parseTasks, type Progress } from './progress/parse'
 import { applyTaskTool, taskProgress } from './progress/tasks'
-import { drawTrack, taskName } from './progress/track'
+import { drawTrack, taskName, type Pose } from './progress/track'
+import { svgWidth, trackSvg, TRACK_HEIGHT } from './progress/svg'
+import { barSvg } from './usage/bar'
 
 const usageRef = { plugin: 'usage-ball', key: 'usage' } as const
 const alertRef = { plugin: 'usage-ball', key: 'alerts' } as const
@@ -35,6 +37,9 @@ async function listNames($: CoreEngineInterface, path: string): Promise<string[]
 
 const ballRef = { plugin: 'usage-ball', key: 'ball' } as const
 const sleepRef = { plugin: 'usage-ball', key: 'sleep' } as const
+const hopRef = { plugin: 'usage-ball', key: 'hop' } as const
+// Bounce heights in px, one per 100ms frame: up and down in 0.6s.
+const HOP = [0, 6, 10, 12, 10, 6]
 
 type Timer = { cancel: () => void }
 
@@ -114,16 +119,18 @@ async function startSleep($: CoreEngineInterface, timers: { sleep?: Timer }) {
 async function progressView($: CoreEngineInterface, isAsleep: boolean) {
   const progress = (await $.state.get(progressRef)).value
   if (!progress || progress.total === 0) {
-    const sleep = isAsleep ? ' ' + zzz((await $.state.get(sleepRef)).value?.tick ?? 0) : ''
-    return { air: sleep, ground: '●', done: 0, total: 0, name: '' }
+    const z = isAsleep ? zzz((await $.state.get(sleepRef)).value?.tick ?? 0) : undefined
+    const pose: Pose = { kind: 'rest', sleep: z }
+    return { air: z ? ' ' + z : '', ground: '●', done: 0, total: 0, name: '', shown: 0, pose }
   }
   const ball = (await $.state.get(ballRef)).value ?? { shown: progress.done, total: progress.total, phase: 'rest', step: 0, sparkle: false }
   const pose = ball.phase === 'jump' ? { kind: 'jump' as const, frame: Math.min(3, Math.max(1, ball.step)) as 1 | 2 | 3 }
     : ball.phase === 'bounce' ? { kind: 'bounce' as const, up: ball.step % 2 === 0, sparkle: true }
     : ball.sparkle ? { kind: 'bounce' as const, up: false, sparkle: true }
     : { kind: 'rest' as const, sleep: isAsleep ? zzz((await $.state.get(sleepRef)).value?.tick ?? 0) : undefined }
-  const track = drawTrack(progress.total, Math.min(ball.shown, progress.total), pose)
-  return { air: track.air, ground: track.ground, done: progress.done, total: progress.total, name: taskName(progress.current) }
+  const shown = Math.min(ball.shown, progress.total)
+  const track = drawTrack(progress.total, shown, pose)
+  return { air: track.air, ground: track.ground, done: progress.done, total: progress.total, name: taskName(progress.current), shown, pose: pose as Pose }
 }
 
 async function processReading(
@@ -189,6 +196,7 @@ export const register: Register = (on, options) => {
   const timers: { bar?: Timer; ball?: Timer; sleep?: Timer } = {}
   let flashTimer: { cancel: () => void } | undefined
   let minuteTimer: { cancel: () => void } | undefined
+  let hopTimer: { cancel: () => void } | undefined
   on('session.start', async ($, e, next) => {
     await processReading($, await $.session.usage(), warn, ctxWarn, timers)
     await refreshProgress($, timers)
@@ -249,8 +257,50 @@ export const register: Register = (on, options) => {
     const flash = (await $.state.get(flashRef)).value
     const now = await $.clock.now()
     const progress = await progressView($, !e.props.isWorking)
-    const rows = composeBand(Math.max(0, e.props.bodyColumns - 4), usage ?? {}, now, warn, ctxWarn, warningVisible((flash?.tick ?? 12) * 250), display, progress)
+    const showWarning = warningVisible((flash?.tick ?? 12) * 250)
+    if (e.surface !== 'terminal') {
+      // Proportional fonts: bars and track are vector images; columns are boxes, never padding spaces.
+      const { Box, Text, Svg } = $.ui.resolve(e)
+      const width = e.props.bodyColumns
+      const band = layoutBand(width, usage ?? {}, now, warn, ctxWarn, showWarning, display, progress)
+      if (e.props.isWorking && !hopTimer) hopTimer = $.clock.every(100, async () => {
+        await $.state.set(hopRef, { tick: ((await $.state.get(hopRef)).value?.tick ?? 0) + 1 })
+      })
+      if (!e.props.isWorking && hopTimer) { hopTimer.cancel(); hopTimer = undefined }
+      const hopTick = (await $.state.get(hopRef)).value?.tick ?? 0
+      const hop = e.props.isWorking ? HOP[hopTick % HOP.length]! : 0
+      const track = trackSvg({ total: Math.max(1, progress.total), shown: progress.shown, pose: progress.pose, hop })
+      const level = (percent: number | undefined, limit: number) =>
+        percent === undefined ? { dimColor: true } : { color: levelColor(percent, limit) }
+      const bar = (label: string, shownPercent: number, percent: number | undefined, limit: number, size: number) =>
+        <Svg source={barSvg(shownPercent, size, percent === undefined ? 'success' : levelColor(percent, limit))} alt={`${label} ${percent === undefined ? 'unknown' : Math.round(percent) + '%'}`} width={size} height={8} />
+      const quotaSize = band.narrowBars ? 60 : 120
+      const quota = (part: typeof band.parts.five, percent: number | undefined, shownPercent: number | undefined) =>
+        <Box flexDirection="row" alignItems="center" columnGap={2}>
+          <Box width={3} flexShrink={0}><Text dimColor>{part.label.trim()}</Text></Box>
+          {band.showBar && bar(part.label.trim(), shownPercent ?? percent ?? 0, percent, warn, quotaSize)}
+          <Box width={band.parts.amountWidth} flexShrink={0} justifyContent="flex-end"><Text {...level(percent, warn)}>{part.amount.trim()}</Text></Box>
+          {band.showReset && <Box width={8} flexShrink={0} justifyContent="flex-end"><Text dimColor>{part.reset.trim()}</Text></Box>}
+        </Box>
+      return <Box flexDirection="row" justifyContent="space-between" alignItems="flex-end" columnGap={5} width={width}>
+        <Box flexDirection="row" alignItems="flex-end" flexShrink={1}>
+          <Svg source={track} alt={progress.total ? `progress ${progress.done} of ${progress.total}` : 'no progress yet'} width={svgWidth(track)} height={TRACK_HEIGHT} />
+          <Box flexDirection="row" alignItems="center" columnGap={1} marginLeft={1}>
+            {band.parts.counter.trim() && <Text wrap="truncate-end">{band.parts.counter.trim()}</Text>}
+            <Text dimColor>ctx</Text>
+            {band.showBar && <Box marginLeft={1}>{bar('ctx', display?.context ?? usage?.context ?? 0, usage?.context, ctxWarn, band.narrowBars ? 36 : 64)}</Box>}
+            <Text {...level(usage?.context, ctxWarn)}>{band.parts.ctx.trim()}</Text>
+          </Box>
+        </Box>
+        <Box flexDirection="column" flexShrink={0}>
+          {quota(band.parts.five, usage?.fiveHour?.percent, display?.fiveHour)}
+          {quota(band.parts.seven, usage?.sevenDay?.percent, display?.sevenDay)}
+        </Box>
+      </Box>
+    }
     const { Box, Text } = $.ui.resolve(e)
+    const width = Math.max(0, e.props.bodyColumns - 4)
+    const rows = composeBand(width, usage ?? {}, now, warn, ctxWarn, showWarning, display, progress)
     const paint = (line: string) => {
       const pieces = []
       const pattern = /●|[┄○…]+|ctx|5h|7d|[⣿⡇⣀]+|⚠️? \d+% left|\d+%|—|\([^)]*\)/gu

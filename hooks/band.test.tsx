@@ -185,3 +185,98 @@ test('a narrow band hides the task name first and keeps the count', () => {
   expect(rows[1]).not.toMatch('Write')
   expect(rows[0]).toMatch('(2h13m)')
 })
+
+type Node = { type?: string; props?: Record<string, unknown>; children?: unknown }
+const nodes = (node: unknown): Node[] => {
+  if (Array.isArray(node)) return node.flatMap(nodes)
+  if (!node || typeof node !== 'object') return []
+  const n = node as Node
+  return [n, ...nodes(n.children)]
+}
+const textOf = (node: unknown): string => {
+  if (typeof node === 'string') return node
+  if (Array.isArray(node)) return node.map(textOf).join('')
+  if (node && typeof node === 'object' && 'children' in node) return textOf((node as Node).children)
+  return ''
+}
+const desktopProps = { hasSurvey: false, isWorking: false, maxRows: 2, bodyColumns: 96, scroll: { offset: 0, bodyRows: 2 }, view: {} }
+
+test('desktop pushes the quota block to the right edge with layout, not padding spaces', async ($, on) => {
+  mock.clock(on, { now: Date.parse('2026-10-04T00:00:00Z') })
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  await $.session.measure({ context: { window: 200000, percent: 10 }, rateLimits: [
+    { kind: 'five_hour', percentUsed: 45, resetsAt: '2026-10-04T03:02:00Z' },
+    { kind: 'seven_day', percentUsed: 26, resetsAt: '2026-10-05T18:00:00Z' },
+  ], changed: ['context', 'rateLimits'] })
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: desktopProps })
+  const drawn = await ui.drawn()
+  const spread = nodes(drawn).find(n => n.props?.justifyContent === 'space-between')
+  expect(spread).toBeDefined()
+  const [left, right] = spread!.children as unknown[]
+  expect(textOf(left)).toMatch('ctx')
+  expect(textOf(right)).toMatch('5h')
+  expect(textOf(right)).toMatch('7d')
+  expect(textOf(drawn)).not.toMatch(/ {6,}/)
+  await ui.unmount()
+})
+
+test('desktop gives 5h and 7d the same column widths even when only one row warns', async ($, on) => {
+  mock.clock(on, { now: Date.parse('2026-10-04T00:00:00Z') })
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  await $.session.measure({ context: { window: 200000, percent: 10 }, rateLimits: [
+    { kind: 'five_hour', percentUsed: 91, resetsAt: '2026-10-04T03:02:00Z' },
+    { kind: 'seven_day', percentUsed: 26 },
+  ], changed: ['context', 'rateLimits'] })
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: desktopProps })
+  const spread = nodes(await ui.drawn()).find(n => n.props?.justifyContent === 'space-between')!
+  const right = (spread.children as unknown[])[1] as Node
+  const [five = [], seven = []] = (right.children as Node[]).map(row => (row.children as Node[]).filter(Boolean).map(cell => cell.props?.width))
+  expect(five).toEqual(seven)
+  expect(five.every(w => typeof w === 'number')).toBe(true)
+  await ui.unmount()
+})
+
+test('desktop draws the track and every bar as vector images, never braille or track glyphs', async ($, on) => {
+  mock.clock(on, { now: 0 })
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))
+  await $.session.measure({ context: { window: 200000, percent: 17 }, rateLimits: [
+    { kind: 'five_hour', percentUsed: 50 }, { kind: 'seven_day', percentUsed: 27 },
+  ], changed: ['context', 'rateLimits'] })
+  await $.tool.call({ tool: 'TodoWrite', todos: [
+    { content: 'a', status: 'completed', activeForm: 'a' },
+    { content: 'b', status: 'in_progress', activeForm: 'Write tests' },
+  ] } as never)
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: { ...desktopProps, isWorking: true } })
+  const drawn = await ui.drawn()
+  const svgs = nodes(drawn).filter(n => n.type === 'Svg')
+  expect(svgs).toHaveLength(4)
+  expect(svgs.every(n => n.props?.isInteractive !== true && typeof n.props?.width === 'number' && typeof n.props?.height === 'number')).toBe(true)
+  expect(textOf(drawn)).not.toMatch(/[⣿⡇⣀✓━┄○●]/)
+  await ui.unmount()
+})
+
+test('desktop bounces the resting ball frame by frame while Claude works', async ($, on) => {
+  const clock = mock.clock(on, { now: 0 })
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: { ...desktopProps, isWorking: true } })
+  const ballY = async () => {
+    const track = nodes(await ui.drawn()).find(n => n.type === 'Svg' && String(n.props?.source).includes('#D97757'))!
+    return Number(String(track.props!.source).split('fill="#D97757"')[0]!.split('cy="').pop()!.split('"')[0])
+  }
+  expect(await ballY()).toBe(29)
+  await clock.advance(300)
+  expect(await ballY()).toBe(17)
+  await clock.advance(300)
+  expect(await ballY()).toBe(29)
+  await ui.unmount()
+})
+
+test('desktop keeps at least five cells between the left and right blocks', async ($, on) => {
+  mock.clock(on, { now: 0 })
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: desktopProps })
+  const spread = nodes(await ui.drawn()).find(n => n.props?.justifyContent === 'space-between')!
+  expect(Number(spread.props?.columnGap ?? 0)).toBeGreaterThanOrEqual(5)
+  await ui.unmount()
+})

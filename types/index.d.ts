@@ -13,6 +13,6 @@ export type SessionTaskState = { id: string; subject: string; activeForm?: strin
 
 declare module 'claude-code' {
   interface PluginState {
-    'usage-ball': { usage: UsageState; alerts: AlertState; display: DisplayState; flash: FlashState; progress: ProgressState; tasks: SessionTaskState[]; ball: BallState; sleep: { tick: number } }
+    'usage-ball': { usage: UsageState; alerts: AlertState; display: DisplayState; flash: FlashState; progress: ProgressState; tasks: SessionTaskState[]; ball: BallState; sleep: { tick: number }; hop: { tick: number } }
   }
 }
