@@ -1,0 +1,14 @@
+{
+  "name": "usage-ball",
+  "owner": { "name": "nccu1133060" },
+  "metadata": { "description": "usage-ball: a two-row usage and progress band for Claude Code. Unofficial." },
+  "plugins": [
+    {
+      "name": "usage-ball",
+      "source": "./",
+      "description": "Rate-limit and context usage above the prompt, plus an orange ball that hops along your project's task track. Unofficial.",
+      "version": "0.1.0",
+      "license": "MIT"
+    }
+  ]
+}

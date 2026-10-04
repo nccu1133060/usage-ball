@@ -2,9 +2,24 @@
   "name": "usage-ball",
   "version": "0.1.0",
   "description": "A two-row band above the Claude Code prompt: rate-limit and context usage, plus a little orange ball that hops along your project's task track. Unofficial.",
+  "author": {
+    "name": "nccu1133060"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/nccu1133060/usage-ball",
   "types": "./types/index.d.ts",
   "userConfig": {
-    "warnPercent": { "type": "number", "title": "Quota warning", "default": 80, "description": "Quota warning threshold (percent)" },
-    "ctxWarnPercent": { "type": "number", "title": "Context warning", "default": 70, "description": "Context warning threshold (percent)" }
+    "warnPercent": {
+      "type": "number",
+      "title": "Quota warning",
+      "default": 80,
+      "description": "Quota warning threshold (percent)"
+    },
+    "ctxWarnPercent": {
+      "type": "number",
+      "title": "Context warning",
+      "default": 70,
+      "description": "Context warning threshold (percent)"
+    }
   }
 }
