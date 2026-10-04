@@ -7,7 +7,7 @@
 - 繪製在 `ui.render` 的 `{ component: 'AbovePrompt' }`，也就是輸入框上方的橫幅。不使用 `$.ui.status` 狀態列。
 - **固定 2 行**，任何狀態、任何寬度都一樣。
 - `e.props.hasSurvey` 為 true 時讓位：直接回傳 `next(e)`。
-- 寬度一律以 `e.props.bodyColumns` 為準，不使用 `viewport.columns`。
+- 寬度一律以 `e.props.bodyColumns` 為準，不使用 `viewport.columns`。最右邊 4 格保留給 Claude Code 自己的收合按鈕 `[-]`（2026-10-04 實測），所以實際排版寬度是 `bodyColumns - 4`。
 
 ## 2. 版面（以寬度 96 為例；最右邊的 `|` 代表右邊界，不會畫出來）
 
