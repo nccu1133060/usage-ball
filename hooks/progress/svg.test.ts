@@ -62,3 +62,10 @@ test('more than sixteen tasks shows three before and four after the ball with el
   expect(nodes.filter(c => c.includes('fill="none"'))).toHaveLength(4)
   expect(svg.match(/…/g)).toHaveLength(2)
 })
+
+test('the final completion jump stays inside the drawing', () => {
+  const svg = trackSvg({ total: 4, shown: 3, pose: { kind: 'jump', frame: 3 }, isWorking: true })
+  const ball = circles(svg).find(c => c.includes('#D97757'))!
+  const width = Number(svg.split('width="')[1]!.split('"')[0])
+  expect(Number(ball.split('cx="')[1]!.split('"')[0]) + 6).toBeLessThanOrEqual(width)
+})

@@ -33,7 +33,7 @@ export function trackSvg({ total, shown, pose, isWorking }: { total: number; sho
   parts.push(`<circle cx="${ballX}" cy="${ballY}" r="6" fill="${BALL}">${bounces ? BOUNCE : ''}</circle>`)
   if (first > 0) parts.push(`<text x="0" y="${GROUND + 4}" font-size="13" fill="${GRAY}">…</text>`)
   if (last < total - 1) parts.push(`<text x="${x(last) + 8}" y="${GROUND + 4}" font-size="13" fill="${GRAY}">…</text>`)
-  let width = x(last) + (last < total - 1 ? 24 : 10)
+  let width = Math.max(x(last) + (last < total - 1 ? 24 : 10), ballX + 8)
   if (pose.kind === 'rest' && pose.sleep) {
     parts.push(`<text x="${x(ball) + 8}" y="14" font-size="13" font-family="sans-serif" fill="${GRAY}">${pose.sleep}</text>`)
     width = Math.max(width, x(ball) + 36)
