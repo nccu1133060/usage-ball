@@ -1,0 +1,7 @@
+HANDOFF.md
+STATUS.md
+docs/plugin-api/
+docs/handoff-archive/
+docs/open-questions.md
+.claude-plugin/types/
+node_modules/
