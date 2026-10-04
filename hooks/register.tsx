@@ -1,8 +1,8 @@
 import type { CoreEngineInterface, Register, SessionUsage } from 'claude-code'
-import { composeBand } from './band'
+import { composeBand, layoutBand } from './band'
 import type { UsageState, DisplayState } from '../types'
 import { crossingAlerts } from './usage/alerts'
-import { formatReset, levelColor } from './usage/format'
+import { charWidth, formatReset, levelColor } from './usage/format'
 import { nextBarPercent, warningVisible } from './usage/animate'
 import { parseChecklist, parseTasks, type Progress } from './progress/parse'
 import { applyTaskTool, taskProgress } from './progress/tasks'
@@ -249,8 +249,43 @@ export const register: Register = (on, options) => {
     const flash = (await $.state.get(flashRef)).value
     const now = await $.clock.now()
     const progress = await progressView($, !e.props.isWorking)
-    const rows = composeBand(Math.max(0, e.props.bodyColumns - 4), usage ?? {}, now, warn, ctxWarn, warningVisible((flash?.tick ?? 12) * 250), display, progress)
+    const width = Math.max(0, e.props.bodyColumns - 4)
+    const showWarning = warningVisible((flash?.tick ?? 12) * 250)
     const { Box, Text } = $.ui.resolve(e)
+    if (e.surface !== 'terminal') {
+      // Proportional fonts: align with boxes measured in cells, never with padding spaces.
+      const band = layoutBand(width, usage ?? {}, now, warn, ctxWarn, showWarning, display, progress)
+      const glyph = (char: string) => char === '●' ? <Text color="#D97757">{char}</Text>
+        : /[┄○…]/.test(char) ? <Text dimColor>{char}</Text>
+        : <Text>{char}</Text>
+      const grid = (text: string) => Array.from(text.replaceAll('️', '')).map(char =>
+        <Box width={charWidth(char)} flexShrink={0}>{char === ' ' ? null : glyph(char)}</Box>)
+      const level = (percent: number | undefined, limit: number) =>
+        percent === undefined ? { dimColor: true } : { color: levelColor(percent, limit) }
+      const quota = (part: typeof band.parts.five, percent: number | undefined) =>
+        <Box flexDirection="row">
+          <Box width={5} flexShrink={0}><Text dimColor>{part.label.trim()}</Text></Box>
+          {band.showBar && <Box width={part.bar.length + 1} flexShrink={0}><Text {...level(percent, warn)}>{part.bar}</Text></Box>}
+          <Box width={band.parts.amountWidth} flexShrink={0} justifyContent="flex-end"><Text {...level(percent, warn)}>{part.amount.trim()}</Text></Box>
+          {band.showReset && <Box width={9} flexShrink={0} justifyContent="flex-end"><Text dimColor>{part.reset.trim()}</Text></Box>}
+        </Box>
+      return <Box flexDirection="row" justifyContent="space-between" width={width}>
+        <Box flexDirection="column" flexShrink={1}>
+          <Box flexDirection="row" height={1}>{grid(band.air ? '  ' + band.air : '')}</Box>
+          <Box flexDirection="row">
+            {grid('  ' + band.ground)}
+            <Text wrap="truncate-end">{band.parts.counter.trimEnd()}{band.parts.counter ? ' ' : ''}<Text dimColor>ctx</Text> </Text>
+            {band.parts.ctxBar && <Box width={band.parts.ctxBar.length + 1} flexShrink={0}><Text {...level(usage?.context, ctxWarn)}>{band.parts.ctxBar}</Text></Box>}
+            <Text {...level(usage?.context, ctxWarn)}>{band.parts.ctx.trim()}</Text>
+          </Box>
+        </Box>
+        <Box flexDirection="column" flexShrink={0}>
+          {quota(band.parts.five, usage?.fiveHour?.percent)}
+          {quota(band.parts.seven, usage?.sevenDay?.percent)}
+        </Box>
+      </Box>
+    }
+    const rows = composeBand(width, usage ?? {}, now, warn, ctxWarn, showWarning, display, progress)
     const paint = (line: string) => {
       const pieces = []
       const pattern = /●|[┄○…]+|ctx|5h|7d|[⣿⡇⣀]+|⚠️? \d+% left|\d+%|—|\([^)]*\)/gu
