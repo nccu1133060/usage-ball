@@ -1,5 +1,5 @@
 import { test, expect } from 'claude-code/testing'
-import { brailleBar, levelColor, formatReset, usageRow } from './format'
+import { brailleBar, levelColor, formatReset, usageRow, cellWidth } from './format'
 
 test('42 percent fills eight half cells in a ten-cell bar', () => {
   expect(brailleBar(42, 10)).toBe('⣿⣿⣿⣿⣀⣀⣀⣀⣀⣀')
@@ -45,4 +45,10 @@ test('half-cell rounding and a five-cell context bar', () => {
   expect(brailleBar(63, 5)).toBe('⣿⣿⣿⣀⣀')
   expect(brailleBar(2.4, 10)).toBe('⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀')
   expect(brailleBar(2.5, 10)).toBe('⡇⣀⣀⣀⣀⣀⣀⣀⣀⣀')
+})
+
+test('cellWidth counts CJK characters as two terminal cells', () => {
+  expect(cellWidth('小球進度')).toBe(8)
+  expect(cellWidth('2/5 小球')).toBe(8)
+  expect(cellWidth('⣿⡇ ✓━●○ ⚠️')).toBe(9)
 })

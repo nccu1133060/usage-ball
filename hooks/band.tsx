@@ -1,4 +1,4 @@
-import { brailleBar, cellWidth, usageRow } from './usage/format'
+import { brailleBar, cellWidth, charWidth, usageRow } from './usage/format'
 import type { UsageState, DisplayState } from '../types'
 
 function clip(text: string, width: number): string {
@@ -7,9 +7,9 @@ function clip(text: string, width: number): string {
   for (const char of text) {
     if (char === '\uFE0F') {
       if (result) result += char
-    } else if (cells < width) {
+    } else if (cells + charWidth(char) <= width) {
       result += char
-      cells += 1
+      cells += charWidth(char)
     } else {
       break
     }
@@ -25,7 +25,9 @@ export function composeBand(
   ctxWarn = 70,
   warningVisible = true,
   display?: DisplayState,
+  progress?: { air: string; ground: string; done: number; total: number; name: string },
 ): [string, string] {
+  let showName = true
   let quotaCells = 10
   let contextCells = 5
   let showReset = true
@@ -39,21 +41,26 @@ export function composeBand(
     const ctx = usage.context === undefined ? '   —' : Math.round(usage.context) >= ctxWarn
       ? `${warningVisible ? '⚠️' : '  '} ${100 - Math.round(usage.context)}% left`
       : `${Math.round(usage.context)}%`.padStart(4)
-    const left = `  ctx ${showBar ? brailleBar(display?.context ?? usage.context ?? 0, contextCells) + ' ' : ''}${ctx}`
+    const count = !progress ? ''
+      : progress.total === 0 ? `${progress.ground}  `
+      : `${progress.ground}  ${progress.done}/${progress.total}${showName && progress.name ? ' ' + progress.name : ''} · `
+    const left = `  ${count}ctx ${showBar ? brailleBar(display?.context ?? usage.context ?? 0, contextCells) + ' ' : ''}${ctx}`
     const trimReset = (text: string) => showReset ? text : text.slice(0, -9)
     return { top: trimReset(row(five)), bottom: trimReset(row(seven)), left }
   }
 
   let parts = make()
   const fits = () => cellWidth(parts.left) + 5 + Math.max(cellWidth(parts.top), cellWidth(parts.bottom)) <= width
+  if (!fits()) { showName = false; parts = make() }
   if (!fits()) { quotaCells = 5; contextCells = 3; parts = make() }
   if (!fits()) { showReset = false; parts = make() }
   if (!fits()) { showBar = false; parts = make() }
 
-  const topPad = Math.max(0, width - cellWidth(parts.top))
+  const air = progress?.air ? `  ${progress.air}` : ''
+  const topPad = Math.max(0, width - cellWidth(air) - cellWidth(parts.top))
   const bottomPad = Math.max(5, width - cellWidth(parts.left) - cellWidth(parts.bottom))
   return [
-    clip(' '.repeat(topPad) + parts.top, width),
+    clip(air + ' '.repeat(topPad) + parts.top, width),
     clip(parts.left + ' '.repeat(bottomPad) + parts.bottom, width),
   ]
 }

@@ -1,5 +1,6 @@
 import { test, expect, mock } from 'claude-code/testing'
 import { composeBand } from './band'
+import { cellWidth } from './usage/format'
 
 test('two lines put quota rows on the right and context on line two', () => {
   const rows = composeBand(96, { fiveHour: { percent: 42 }, sevenDay: { percent: 18 }, context: 63 }, 0)
@@ -166,4 +167,21 @@ test('AbovePrompt yields to a survey', async ($, on) => {
   } })
   expect(JSON.stringify(await ui.drawn())).not.toMatch('ctx')
   await ui.unmount()
+})
+
+test('progress puts the air row on line one and track, count, name and ctx on line two', () => {
+  const usage = { fiveHour: { percent: 42 }, sevenDay: { percent: 18 }, context: 63 }
+  const rows = composeBand(96, usage, 0, 80, 70, true, undefined, { air: '', ground: '✓━━━━✓━━━━●┄┄┄┄○┄┄┄┄○', done: 2, total: 5, name: '小球進度' })
+  expect(rows[1]).toMatch(/^  ✓━━━━✓━━━━●┄┄┄┄○┄┄┄┄○  2\/5 小球進度 · ctx ⣿⣿⣿⣀⣀  63%/)
+  expect(cellWidth(rows[0])).toBe(96)
+  expect(cellWidth(rows[1])).toBe(96)
+  expect(cellWidth(rows[0].slice(0, rows[0].indexOf('5h')))).toBe(cellWidth(rows[1].slice(0, rows[1].indexOf('7d'))))
+})
+
+test('a narrow band hides the task name first and keeps the count', () => {
+  const usage = { fiveHour: { percent: 42, resetsAt: '2026-10-04T02:13:00Z' }, sevenDay: { percent: 18 }, context: 63 }
+  const rows = composeBand(84, usage, Date.parse('2026-10-04T00:00:00Z'), 80, 70, true, undefined, { air: '', ground: '✓━━━━✓━━━━●┄┄┄┄○┄┄┄┄○', done: 2, total: 5, name: 'Write the onboarding gu…' })
+  expect(rows[1]).toMatch(/2\/5 · ctx/)
+  expect(rows[1]).not.toMatch('Write')
+  expect(rows[0]).toMatch('(2h13m)')
 })
