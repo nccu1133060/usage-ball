@@ -67,7 +67,7 @@ claude --plugin-dir ./usage-ball
 | `warnPercent` | `80` | Warning line for the 5h and 7d windows |
 | `ctxWarnPercent` | `70` | Warning line for context. Lower, because Claude Code compacts long conversations |
 
-Change them with `claude plugin configure usage-ball`, or in Claude Code's plugin settings.
+Change them with `/plugin configure usage-ball@usage-ball` in Claude Code, or `claude plugin install usage-ball@usage-ball --config warnPercent=75`. Unset options use the defaults.
 
 ## Known limits
 
