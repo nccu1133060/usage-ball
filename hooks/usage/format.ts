@@ -22,8 +22,14 @@ export function formatReset(resetsAt: string | undefined, now: number): string {
   return text.padEnd(8)
 }
 
+const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/
+
+export function charWidth(char: string): number {
+  return char === '\uFE0F' ? 0 : WIDE.test(char) ? 2 : 1
+}
+
 export function cellWidth(text: string): number {
-  return Array.from(text.replaceAll('\uFE0F', '')).length
+  return Array.from(text).reduce((sum, char) => sum + charWidth(char), 0)
 }
 
 export function usageRow(
