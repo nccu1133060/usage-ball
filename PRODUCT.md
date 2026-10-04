@@ -37,7 +37,7 @@ Claude Code mod（外掛的 hooks 模組）：TypeScript／TSX，以 Claude Code
 
 - 額度：5h、7d 的百分比與重置倒數；ctx 的百分比。資料來源是 `session.measure` 事件和 `$.session.usage()`。
 - 進度來源依序找：`HANDOFF.md` 的 `## 進度` 勾選框 → `## Task N` 標題加 `狀態：完成`（封存資料夾裡的也算完成）→ 本次對話的任務清單。
-- 可設定項目只有一個：警戒線 %（預設額度 80%、上下文 70%）。
+- 可設定項目只有警戒線 %，分成兩個欄位：`warnPercent`（額度，預設 80）、`ctxWarnPercent`（上下文，預設 70）。
 - 第一版不做：側欄版面（全螢幕模式自動切換、小球爬梯子）留到第二版；不做多語系標籤。
 - 需要支援 mod 的新版 Claude Code（開發時使用 2.1.289）。
 

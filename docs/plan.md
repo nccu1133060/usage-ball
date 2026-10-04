@@ -45,16 +45,16 @@ Claude Code 引擎
 
 TDD 依序一次做一個行為（每項都是：寫一個失敗測試 → 跑它看到紅 → 最小實作 → 綠 → 重構）：
 
-1. `brailleBar(42, 10)` → `⣿⣿⣿⣿⡇⣀⣀⣀⣀⣀`；0%、100%、四捨五入到半格的邊界值。
-2. `levelColor(p, warn)`：低於 50 → `success`；50 到 warn → `warning`；達到 warn 以上 → `error`。
+1. `brailleBar(42, 10)` → `⣿⣿⣿⣿⣀⣀⣀⣀⣀⣀`、`brailleBar(45, 10)` → `⣿⣿⣿⣿⡇⣀⣀⣀⣀⣀`；0%、100%、四捨五入到半格的邊界值；`brailleBar(63, 5)`。
+2. `levelColor(p, warn)`：低於 50 → `success`；50 以上且低於 warn → `warning`；大於或等於 warn → `error`（p 先四捨五入成整數）。
 3. `formatReset(resetsAt, now)`：`(42m)`、`(2h13m)`、`(4d6h)`；沒有 `resetsAt` 時回傳同寬空白。
 4. `usageRow`：標籤補到 3 格、百分比補到 4 格並靠右；超過警戒線時變成 `⚠️ 9% left`；沒有數字時顯示 `—`。
 5. `session.measure` 把 5h（`five_hour`）、7d（`seven_day`）、ctx 寫進 atom；其他 `kind` 忽略。
 6. 畫面：AbovePrompt 輸出 2 行，右區貼齊右邊界、左右兩區之間至少 5 格；`hasSurvey` 時讓位。
-7. 寬度收縮：依 DESIGN §7 的順序（這個階段沒有任務名稱，從第 2 步開始）。
+7. 寬度收縮：依 DESIGN §7 的順序（這個階段沒有任務名稱，從第 2 步開始）；小於 40 格時截斷，但仍維持 2 行。
 8. 進度條長上去：數字變動時，每 100ms 前進 1 個半格，最長 1 秒（模擬時鐘）。
 9. 警示頻閃：`turn.complete` 後，超過警戒線的那項 ⚠️ 每 250ms 切換一次、共 3 秒，隱藏時用同寬空白。
-10. 跨線提醒小框：跨線時呼叫 `$.ui.toast` 一次；同一個 `resetsAt` 不重複；記錄存在 `$.state`。
+10. 跨線提醒小框：依 DESIGN §6.3 的去重規則（含沒有 `resetsAt`、ctx 回落後重新啟用、第一次讀到就已達警戒線）。
 11. `userConfig`：`test(name, { options: { warnPercent: 60 } })` 時，警戒線跟著改。
 
 ## Task 2：小球進度（左區）
