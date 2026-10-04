@@ -251,7 +251,32 @@ test('desktop draws the track and every bar as vector images, never braille or t
   const drawn = await ui.drawn()
   const svgs = nodes(drawn).filter(n => n.type === 'Svg')
   expect(svgs).toHaveLength(4)
-  expect(svgs.some(n => String(n.props?.source).includes('<animate') && n.props?.isInteractive === true)).toBe(true)
+  expect(svgs.every(n => n.props?.isInteractive !== true && typeof n.props?.width === 'number' && typeof n.props?.height === 'number')).toBe(true)
   expect(textOf(drawn)).not.toMatch(/[⣿⡇⣀✓━┄○●]/)
+  await ui.unmount()
+})
+
+test('desktop bounces the resting ball frame by frame while Claude works', async ($, on) => {
+  const clock = mock.clock(on, { now: 0 })
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: { ...desktopProps, isWorking: true } })
+  const ballY = async () => {
+    const track = nodes(await ui.drawn()).find(n => n.type === 'Svg' && String(n.props?.source).includes('#D97757'))!
+    return Number(String(track.props!.source).split('fill="#D97757"')[0]!.split('cy="').pop()!.split('"')[0])
+  }
+  expect(await ballY()).toBe(29)
+  await clock.advance(300)
+  expect(await ballY()).toBe(17)
+  await clock.advance(300)
+  expect(await ballY()).toBe(29)
+  await ui.unmount()
+})
+
+test('desktop keeps at least five cells between the left and right blocks', async ($, on) => {
+  mock.clock(on, { now: 0 })
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: desktopProps })
+  const spread = nodes(await ui.drawn()).find(n => n.props?.justifyContent === 'space-between')!
+  expect(Number(spread.props?.columnGap ?? 0)).toBeGreaterThanOrEqual(5)
   await ui.unmount()
 })

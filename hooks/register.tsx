@@ -7,7 +7,7 @@ import { nextBarPercent, warningVisible } from './usage/animate'
 import { parseChecklist, parseTasks, type Progress } from './progress/parse'
 import { applyTaskTool, taskProgress } from './progress/tasks'
 import { drawTrack, taskName, type Pose } from './progress/track'
-import { trackSvg } from './progress/svg'
+import { svgWidth, trackSvg, TRACK_HEIGHT } from './progress/svg'
 import { barSvg } from './usage/bar'
 
 const usageRef = { plugin: 'usage-ball', key: 'usage' } as const
@@ -37,6 +37,9 @@ async function listNames($: CoreEngineInterface, path: string): Promise<string[]
 
 const ballRef = { plugin: 'usage-ball', key: 'ball' } as const
 const sleepRef = { plugin: 'usage-ball', key: 'sleep' } as const
+const hopRef = { plugin: 'usage-ball', key: 'hop' } as const
+// Bounce heights in px, one per 100ms frame: up and down in 0.6s.
+const HOP = [0, 6, 10, 12, 10, 6]
 
 type Timer = { cancel: () => void }
 
@@ -193,6 +196,7 @@ export const register: Register = (on, options) => {
   const timers: { bar?: Timer; ball?: Timer; sleep?: Timer } = {}
   let flashTimer: { cancel: () => void } | undefined
   let minuteTimer: { cancel: () => void } | undefined
+  let hopTimer: { cancel: () => void } | undefined
   on('session.start', async ($, e, next) => {
     await processReading($, await $.session.usage(), warn, ctxWarn, timers)
     await refreshProgress($, timers)
@@ -259,8 +263,13 @@ export const register: Register = (on, options) => {
       const { Box, Text, Svg } = $.ui.resolve(e)
       const width = e.props.bodyColumns
       const band = layoutBand(width, usage ?? {}, now, warn, ctxWarn, showWarning, display, progress)
-      const bounce = e.props.isWorking && progress.pose.kind === 'rest'
-      const track = trackSvg({ total: Math.max(1, progress.total), shown: progress.shown, pose: progress.pose, isWorking: e.props.isWorking })
+      if (e.props.isWorking && !hopTimer) hopTimer = $.clock.every(100, async () => {
+        await $.state.set(hopRef, { tick: ((await $.state.get(hopRef)).value?.tick ?? 0) + 1 })
+      })
+      if (!e.props.isWorking && hopTimer) { hopTimer.cancel(); hopTimer = undefined }
+      const hopTick = (await $.state.get(hopRef)).value?.tick ?? 0
+      const hop = e.props.isWorking ? HOP[hopTick % HOP.length]! : 0
+      const track = trackSvg({ total: Math.max(1, progress.total), shown: progress.shown, pose: progress.pose, hop })
       const level = (percent: number | undefined, limit: number) =>
         percent === undefined ? { dimColor: true } : { color: levelColor(percent, limit) }
       const bar = (label: string, shownPercent: number, percent: number | undefined, limit: number, size: number) =>
@@ -273,9 +282,9 @@ export const register: Register = (on, options) => {
           <Box width={band.parts.amountWidth} flexShrink={0} justifyContent="flex-end"><Text {...level(percent, warn)}>{part.amount.trim()}</Text></Box>
           {band.showReset && <Box width={8} flexShrink={0} justifyContent="flex-end"><Text dimColor>{part.reset.trim()}</Text></Box>}
         </Box>
-      return <Box flexDirection="row" justifyContent="space-between" alignItems="flex-end" width={width}>
+      return <Box flexDirection="row" justifyContent="space-between" alignItems="flex-end" columnGap={5} width={width}>
         <Box flexDirection="row" alignItems="flex-end" flexShrink={1}>
-          <Svg source={track} alt={progress.total ? `progress ${progress.done} of ${progress.total}` : 'no progress yet'} isInteractive={bounce || undefined} />
+          <Svg source={track} alt={progress.total ? `progress ${progress.done} of ${progress.total}` : 'no progress yet'} width={svgWidth(track)} height={TRACK_HEIGHT} />
           <Box flexDirection="row" alignItems="center" columnGap={1} marginLeft={1}>
             {band.parts.counter.trim() && <Text wrap="truncate-end">{band.parts.counter.trim()}</Text>}
             <Text dimColor>ctx</Text>
