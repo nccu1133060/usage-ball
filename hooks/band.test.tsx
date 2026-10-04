@@ -236,23 +236,22 @@ test('desktop gives 5h and 7d the same column widths even when only one row warn
   await ui.unmount()
 })
 
-test('desktop draws the track one cell per glyph so the sleeping Z sits over the ball', async ($, on) => {
+test('desktop draws the track and every bar as vector images, never braille or track glyphs', async ($, on) => {
   mock.clock(on, { now: 0 })
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))
+  await $.session.measure({ context: { window: 200000, percent: 17 }, rateLimits: [
+    { kind: 'five_hour', percentUsed: 50 }, { kind: 'seven_day', percentUsed: 27 },
+  ], changed: ['context', 'rateLimits'] })
   await $.tool.call({ tool: 'TodoWrite', todos: [
     { content: 'a', status: 'completed', activeForm: 'a' },
     { content: 'b', status: 'in_progress', activeForm: 'Write tests' },
-    { content: 'c', status: 'pending', activeForm: 'c' },
   ] } as never)
-  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: desktopProps })
-  const spread = nodes(await ui.drawn()).find(n => n.props?.justifyContent === 'space-between')!
-  const left = (spread.children as Node[])[0]!
-  const [air = [], ground = []] = (left.children as Node[]).map(row => row.children as Node[])
-  const ballAt = ground.findIndex(cell => textOf(cell) === '●')
-  const zAt = air.findIndex(cell => textOf(cell) === 'z')
-  expect(ballAt).toBeGreaterThan(0)
-  expect(zAt).toBe(ballAt + 1)
-  expect(ground.slice(0, ballAt).every(cell => cell.props?.width === 1)).toBe(true)
+  const ui = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props: { ...desktopProps, isWorking: true } })
+  const drawn = await ui.drawn()
+  const svgs = nodes(drawn).filter(n => n.type === 'Svg')
+  expect(svgs).toHaveLength(4)
+  expect(svgs.some(n => String(n.props?.source).includes('<animate') && n.props?.isInteractive === true)).toBe(true)
+  expect(textOf(drawn)).not.toMatch(/[⣿⡇⣀✓━┄○●]/)
   await ui.unmount()
 })

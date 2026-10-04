@@ -161,11 +161,12 @@ test('the ball is drawn in its own orange on terminal and desktop', async ($, on
   mock.clock(on, { now: 0 })
   files(on, '## 進度\n\n- [x] a\n- [ ] b\n')
   await start($, on)
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ plugin: 'usage-ball', surface, component: 'AbovePrompt', props })
-    expect(JSON.stringify(await ui.drawn())).toMatch('{"color":"#D97757"},"children":["●"]')
-    await ui.unmount()
-  }
+  const terminal = await $.ui.mount({ plugin: 'usage-ball', surface: 'terminal', component: 'AbovePrompt', props })
+  expect(JSON.stringify(await terminal.drawn())).toMatch('{"color":"#D97757"},"children":["●"]')
+  await terminal.unmount()
+  const desktop = await $.ui.mount({ plugin: 'usage-ball', surface: 'desktop', component: 'AbovePrompt', props })
+  expect(JSON.stringify(await desktop.drawn())).toMatch('fill=\\"#D97757\\"')
+  await desktop.unmount()
 })
 
 test('the track still ahead is dim', async ($, on) => {

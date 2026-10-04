@@ -59,7 +59,7 @@ export function layoutBand(
   if (!fits()) { showReset = false; parts = make() }
   if (!fits()) { showBar = false; parts = make() }
 
-  return { parts, showReset, showBar, air: progress?.air ?? '', ground: progress?.ground ?? '' }
+  return { parts, showReset, showBar, narrowBars: quotaCells < 10, air: progress?.air ?? '', ground: progress?.ground ?? '' }
 }
 
 export function composeBand(
